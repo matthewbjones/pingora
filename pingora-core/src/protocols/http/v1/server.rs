@@ -103,8 +103,8 @@ impl HttpSession {
             update_resp_headers: true,
             response_written: None,
             request_header: None,
-            read_timeout: None,
-            write_timeout: None,
+            read_timeout: Some(Duration::from_secs(60)),
+            write_timeout: Some(Duration::from_secs(60)),
             body_bytes_sent: 0,
             body_bytes_read: 0,
             retry_buffer: None,
@@ -145,7 +145,16 @@ impl HttpSession {
                             return Ok(None);
                         }
                     },
-                    _ => read_event.await,
+                    _ => match self.read_timeout {
+                        Some(t) => match timeout(t, read_event).await {
+                            Ok(res) => res,
+                            Err(e) => {
+                                debug!("read timeout {t:?} reached, {e}");
+                                return Ok(None);
+                            }
+                        },
+                        None => read_event.await,
+                    },
                 }
             };
             let n = match read_result {
